@@ -50,7 +50,7 @@ impl RsaCrypto {
 
         loop {
             if start >= data.len() {
-                println!("start:{} >= data.len():{}", start, data.len());
+                // println!("start:{} >= data.len():{}", start, data.len());
                 break;
             }
 
@@ -80,9 +80,7 @@ impl RsaCrypto {
 
     pub fn decrypt_with_pub_key(pub_key: &Rsa<Public>, data: &[u8]) -> String {
         let data = match base64_url::decode(data) {
-            Ok(v) => {
-                v
-            },
+            Ok(v) => v,
             Err(e) => {
                 panic!("base64_url decode error:{}", e)
             }
@@ -164,7 +162,7 @@ fn public_key_decrypt(pub_str: &str, data: &str) -> PyResult<String> {
 
 #[pymodule]
 fn custody_rsa(m: &Bound<'_, PyModule>) -> PyResult<()> {
-   m.add_function(wrap_pyfunction!(public_key_decrypt, m)?)?;
-   m.add_function(wrap_pyfunction!(private_key_encrypt, m)?)?;
-   Ok(())
+    m.add_function(wrap_pyfunction!(public_key_decrypt, m)?)?;
+    m.add_function(wrap_pyfunction!(private_key_encrypt, m)?)?;
+    Ok(())
 }
