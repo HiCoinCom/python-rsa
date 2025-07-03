@@ -42,8 +42,9 @@ impl RsaCrypto {
 
         //if use Padding::PKCS1 =>encrypt length = key length - 11
         //if use Padding::OAEP  =>encrypt length = key length - 42
-        let encrypt_len = 234;
-        let mut end = start + encrypt_len;
+        let max_encrypt_block = buff_size - 11;
+        //println!("max_encrypt_block:{}", max_encrypt_block);
+        let mut end = start + max_encrypt_block;
         if end > data.len() {
             end = data.len();
         }
@@ -59,8 +60,8 @@ impl RsaCrypto {
             match ret {
                 Ok(size) => {
                     result.extend_from_slice(&buf[0..size]);
-                    start += encrypt_len;
-                    end += encrypt_len;
+                    start += max_encrypt_block;
+                    end += max_encrypt_block;
                     if end > data.len() {
                         end = data.len();
                     }
@@ -82,7 +83,7 @@ impl RsaCrypto {
         let data = match base64_url::decode(data) {
             Ok(v) => v,
             Err(e) => {
-                panic!("base64_url decode error:{}", e)
+                panic!("decrypt_with_pub_key base64_url decode error:{}", e)
             }
         };
 
@@ -91,18 +92,11 @@ impl RsaCrypto {
         let mut buf = vec![0; buff_size];
         let mut start: usize = 0;
         let mut end: usize = data.len();
+        let max_decrypt_block = buff_size;
+        //println!("max_decrypt_block:{}", max_decrypt_block);
 
-        //if use Padding::PKCS1 =>encrypt length = key length - 11
-        //if use Padding::OAEP  =>encrypt length = key length - 42
-        // let encrypt_len = 256 - 11;
-        // if self.m_padding == Padding::PKCS1 {
-        //     encrypt_len = buff_size - 11;
-        // } else if self.m_padding == Padding::PKCS1_OAEP {
-        //     encrypt_len = buff_size - 42
-        // }
-
-        if end > buff_size {
-            end = buff_size;
+        if end > max_decrypt_block {
+            end = max_decrypt_block;
         }
 
         loop {
@@ -114,8 +108,8 @@ impl RsaCrypto {
                 Ok(size) => {
                     result.extend_from_slice(&buf[0..size]);
 
-                    start += buff_size;
-                    end += buff_size;
+                    start += max_decrypt_block;
+                    end += max_decrypt_block;
 
                     if end > data.len() {
                         end = data.len();
@@ -123,7 +117,7 @@ impl RsaCrypto {
                 }
                 Err(e) => {
                     result.clear();
-                    panic!("encrypt_with_priv_key error:{}", e)
+                    panic!("decrypt_with_pub_key error:{}", e)
                 }
             }
         }
