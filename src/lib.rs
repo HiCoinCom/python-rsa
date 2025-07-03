@@ -2,8 +2,9 @@ use openssl::error::ErrorStack;
 use openssl::pkey::{Private, Public};
 use openssl::rsa::{Padding, Rsa};
 
-use pyo3::prelude::*;
-use pyo3::wrap_pyfunction;
+use std::ffi::c_char;
+use std::ffi::CStr;
+use std::ffi::CString;
 
 pub struct RsaCrypto {}
 
@@ -68,7 +69,8 @@ impl RsaCrypto {
                 }
                 Err(e) => {
                     result.clear();
-                    panic!("encrypt_with_priv_key error:{}", e)
+                    println!("encrypt_with_priv_key error:{}", e);
+                    return String::new();
                 }
             }
         }
@@ -83,7 +85,8 @@ impl RsaCrypto {
         let data = match base64_url::decode(data) {
             Ok(v) => v,
             Err(e) => {
-                panic!("decrypt_with_pub_key base64_url decode error:{}", e)
+                println!("decrypt_with_pub_key base64_url decode error:{}", e);
+                return String::new();
             }
         };
 
@@ -117,7 +120,8 @@ impl RsaCrypto {
                 }
                 Err(e) => {
                     result.clear();
-                    panic!("decrypt_with_pub_key error:{}", e)
+                    println!("decrypt_with_pub_key error:{}", e);
+                    return String::new();
                 }
             }
         }
@@ -130,33 +134,94 @@ impl RsaCrypto {
     }
 }
 
-#[pyfunction]
-fn private_key_encrypt(priv_str: &str, data: &str) -> PyResult<String> {
-    let priv_key: Rsa<Private> = match RsaCrypto::load_priv_key(priv_str) {
-        Ok(v) => v,
-        Err(e) => {
-            panic!("load_private_key error:{}", e)
-        }
-    };
-    let encrypt_data = RsaCrypto::encrypt_with_priv_key(&priv_key, data.as_bytes());
-    Ok(encrypt_data)
+#[no_mangle]
+pub extern "C" fn free_c_char(ptr: *mut c_char) {
+    unsafe { drop(CString::from_raw(ptr)) };
 }
 
-#[pyfunction]
-fn public_key_decrypt(pub_str: &str, data: &str) -> PyResult<String> {
-    let pub_key: Rsa<Public> = match RsaCrypto::load_pub_key(pub_str) {
+#[no_mangle]
+pub extern "C" fn private_key_encrypt(
+    priv_str: *const c_char,
+    data: *const c_char,
+) -> *const c_char {
+    let go_priv = unsafe {
+        assert!(!priv_str.is_null());
+        CStr::from_ptr(priv_str)
+    };
+
+    let go_priv_str = match go_priv.to_str() {
         Ok(v) => v,
         Err(e) => {
-            panic!("load_pub_key error:{}", e)
+            println!("parse private key err: {}", e);
+            return std::ptr::null();
         }
     };
-    let decrypt_data = RsaCrypto::decrypt_with_pub_key(&pub_key, data.as_bytes());
-    Ok(decrypt_data)
+
+    let priv_key: Rsa<Private> = match RsaCrypto::load_priv_key(go_priv_str) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("load_private_key error:{}", e);
+            return std::ptr::null();
+        }
+    };
+
+    let go_data = unsafe {
+        assert!(!data.is_null());
+        CStr::from_ptr(data)
+    };
+
+    let go_data_str = match go_data.to_str() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("parse data err: {}", e);
+            return std::ptr::null();
+        }
+    };
+    let encrypt_data = RsaCrypto::encrypt_with_priv_key(&priv_key, go_data_str.as_bytes());
+    if encrypt_data.is_empty() {
+        return std::ptr::null();
+    }
+    CString::new(encrypt_data).unwrap().into_raw()
 }
 
-#[pymodule]
-fn custody_rsa(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(public_key_decrypt, m)?)?;
-    m.add_function(wrap_pyfunction!(private_key_encrypt, m)?)?;
-    Ok(())
+#[no_mangle]
+pub extern "C" fn public_key_decrypt(pub_str: *const c_char, data: *const c_char) -> *const c_char {
+    let go_pub = unsafe {
+        assert!(!pub_str.is_null());
+        CStr::from_ptr(pub_str)
+    };
+
+    let go_pub_str = match go_pub.to_str() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("parse public key err: {}", e);
+            return std::ptr::null();
+        }
+    };
+
+    let pub_key: Rsa<Public> = match RsaCrypto::load_pub_key(go_pub_str) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("load_pub_key error:{}", e);
+            return std::ptr::null();
+        }
+    };
+
+    let go_data = unsafe {
+        assert!(!data.is_null());
+        CStr::from_ptr(data)
+    };
+
+    let go_data_str = match go_data.to_str() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("parse encrypt data err: {}", e);
+            return std::ptr::null();
+        }
+    };
+    let decrypt_data = RsaCrypto::decrypt_with_pub_key(&pub_key, go_data_str.as_bytes());
+    if decrypt_data.is_empty() {
+        return std::ptr::null();
+    }
+    CString::new(decrypt_data).unwrap().into_raw()
 }
