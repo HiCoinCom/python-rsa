@@ -1,5 +1,5 @@
 # python-rsa by rust
-encrypt messag by RSA private for python
+encrypt messag by RSA Private Key for python
 
 cargo >= 1.88
 
